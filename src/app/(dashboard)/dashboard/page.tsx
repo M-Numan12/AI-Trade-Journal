@@ -13,7 +13,13 @@ import {
   ArrowRight,
   TrendingUp as WinIcon,
   TrendingDown as LossIcon,
-  HelpCircle
+  HelpCircle,
+  CheckCircle2,
+  Calculator,
+  AlertCircle,
+  RefreshCw,
+  FileSpreadsheet,
+  BrainCircuit
 } from "lucide-react";
 import { 
   AreaChart, 
@@ -39,34 +45,103 @@ interface Trade {
   createdAt: string;
 }
 
+interface PsychologyLog {
+  id: string;
+  moodBefore: string;
+  emotionAfter?: string;
+  disciplineScore: number;
+  notes?: string;
+  createdAt: string;
+}
+
 export default function DashboardPage() {
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [logs, setLogs] = useState<PsychologyLog[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Pre-Trade Strategy Checklist State
+  const [checklist, setChecklist] = useState({
+    trendAligned: false,
+    keyZone: false,
+    riskDefined: false,
+    timeframeConfirm: false,
+    emotionsChecked: false,
+  });
+
+  // Risk & Position Size Calculator State
+  const [calc, setCalc] = useState({
+    balance: 10000,
+    riskPercent: 1.0,
+    stopLossPips: 20,
+    assetType: "Forex", // "Forex" | "Gold" | "Crypto"
+  });
+
   useEffect(() => {
-    async function loadTrades() {
+    async function loadDashboardData() {
       try {
-        const res = await fetch("/api/trades");
-        if (res.ok) {
-          const data = await res.json();
-          setTrades(data.trades);
+        const [tradesRes, logsRes] = await Promise.all([
+          fetch("/api/trades"),
+          fetch("/api/psychology")
+        ]);
+
+        if (tradesRes.ok) {
+          const tradesData = await tradesRes.json();
+          setTrades(tradesData.trades);
+        }
+        if (logsRes.ok) {
+          const logsData = await logsRes.json();
+          setLogs(logsData.logs);
         }
       } catch (err) {
-        console.error("Failed to load trades", err);
+        console.error("Failed to load dashboard data", err);
       } finally {
         setLoading(false);
       }
     }
-    loadTrades();
+    loadDashboardData();
   }, []);
 
-  // Compute Metrics
+  // Reset Checklist
+  const resetChecklist = () => {
+    setChecklist({
+      trendAligned: false,
+      keyZone: false,
+      riskDefined: false,
+      timeframeConfirm: false,
+      emotionsChecked: false,
+    });
+  };
+
+  // Checklist Score Calculation
+  const checklistCheckedCount = Object.values(checklist).filter(Boolean).length;
+  const checklistPercentage = Math.round((checklistCheckedCount / 5) * 100);
+
+  // Position Size Calculator Math
+  const dollarRisk = parseFloat((calc.balance * (calc.riskPercent / 100)).toFixed(2));
+  let calculatedLotSize = 0;
+
+  if (calc.stopLossPips > 0) {
+    if (calc.assetType === "Forex") {
+      // Standard Forex math: 1 standard lot is 100,000 units. 1 pip is $10 at 1.00 lot.
+      calculatedLotSize = dollarRisk / (calc.stopLossPips * 10);
+    } else if (calc.assetType === "Gold") {
+      // Standard Gold (XAUUSD) math: 1 standard lot represents 100 oz. 1 pip/point difference is $10 at 1.00 lot.
+      calculatedLotSize = dollarRisk / (calc.stopLossPips * 10);
+    } else if (calc.assetType === "Crypto") {
+      // Crypto position sizing (e.g. BTCUSD): Lot size = Dollar risk / stop loss difference (points)
+      calculatedLotSize = dollarRisk / calc.stopLossPips;
+    }
+  }
+  const lotSizeOutput = parseFloat(calculatedLotSize.toFixed(3));
+
+  // Compute Performance Metrics
   const totalTrades = trades.length;
   const winTrades = trades.filter(t => t.result === "WIN").length;
   const winRate = totalTrades > 0 ? Math.round((winTrades / totalTrades) * 100) : 0;
   const netPnL = trades.reduce((sum, t) => sum + t.pnl, 0);
 
-  // Compute Avg RR
+  // Compute Avg RR ratio
+  let rawRRRatio = 0.0;
   let avgRR = "1:2.0";
   if (totalTrades > 0) {
     let totalRR = 0;
@@ -80,7 +155,8 @@ export default function DashboardPage() {
       }
     });
     if (counts > 0) {
-      avgRR = `1:${(totalRR / counts).toFixed(1)}`;
+      rawRRRatio = totalRR / counts;
+      avgRR = `1:${rawRRRatio.toFixed(1)}`;
     }
   }
 
@@ -95,6 +171,88 @@ export default function DashboardPage() {
   const worstPair = sortedPairs.length > 0 && sortedPairs[sortedPairs.length - 1][1] < 0 
     ? sortedPairs[sortedPairs.length - 1][0] 
     : "N/A";
+
+  // Dynamic AI Grading Scale Calculations
+  // 1. Discipline Index Grade (From psychology logs avg discipline score)
+  const avgDisciplineScore = logs.length > 0 
+    ? logs.reduce((sum, l) => sum + l.disciplineScore, 0) / logs.length
+    : null;
+
+  let disciplineGrade = "A";
+  let disciplineGradeColor = "text-emerald-400";
+  if (avgDisciplineScore !== null) {
+    if (avgDisciplineScore >= 9.0) {
+      disciplineGrade = "A+";
+      disciplineGradeColor = "text-emerald-400";
+    } else if (avgDisciplineScore >= 8.0) {
+      disciplineGrade = "A";
+      disciplineGradeColor = "text-emerald-400";
+    } else if (avgDisciplineScore >= 7.0) {
+      disciplineGrade = "B";
+      disciplineGradeColor = "text-violet-400";
+    } else if (avgDisciplineScore >= 5.5) {
+      disciplineGrade = "C";
+      disciplineGradeColor = "text-yellow-400";
+    } else {
+      disciplineGrade = "D";
+      disciplineGradeColor = "text-rose-400";
+    }
+  }
+
+  // 2. Risk-to-Reward Grade (From trades actual SL vs TP ratios)
+  let rrGrade = "B";
+  let rrGradeColor = "text-violet-400";
+  if (totalTrades > 0) {
+    if (rawRRRatio >= 2.5) {
+      rrGrade = "A+";
+      rrGradeColor = "text-emerald-400";
+    } else if (rawRRRatio >= 2.0) {
+      rrGrade = "A";
+      rrGradeColor = "text-emerald-400";
+    } else if (rawRRRatio >= 1.5) {
+      rrGrade = "B";
+      rrGradeColor = "text-violet-400";
+    } else if (rawRRRatio >= 1.0) {
+      rrGrade = "C";
+      rrGradeColor = "text-yellow-400";
+    } else {
+      rrGrade = "F";
+      rrGradeColor = "text-rose-400";
+    }
+  }
+
+  // 3. Consistency Grade (From overall Win Rate)
+  let consistencyGrade = "C";
+  let consistencyGradeColor = "text-yellow-400";
+  if (totalTrades > 0) {
+    if (winRate >= 60) {
+      consistencyGrade = "A";
+      consistencyGradeColor = "text-emerald-400";
+    } else if (winRate >= 50) {
+      consistencyGrade = "B";
+      consistencyGradeColor = "text-violet-400";
+    } else if (winRate >= 40) {
+      consistencyGrade = "C";
+      consistencyGradeColor = "text-yellow-400";
+    } else {
+      consistencyGrade = "D";
+      consistencyGradeColor = "text-rose-400";
+    }
+  }
+
+  // AI Recommendation based on grading outcomes
+  let aiReportTip = "Log your first few trades and psychology logs to enable standard cognitive pattern evaluations.";
+  if (totalTrades > 0 || logs.length > 0) {
+    if (disciplineGrade === "D" || disciplineGrade === "C") {
+      aiReportTip = "💡 Your discipline grade is struggling. Impulsive FOMO/Revenge entries are your main bottleneck. Follow the Pre-Trade Checklist strictly!";
+    } else if (rrGrade === "F" || rrGrade === "C") {
+      aiReportTip = "💡 Poor risk-reward layouts detected. Even with high win-rates, tight RR spacing limits long-term compounding. Push TP targets to 1:2 standard minimums.";
+    } else if (consistencyGrade === "D") {
+      aiReportTip = "💡 Win consistency is low. Audit your market bias. Focus only on EURUSD or Gold standard structures and block out secondary volatile setups.";
+    } else {
+      aiReportTip = "🎯 Outstanding balance! Your discipline and risk spacings are highly professional. Continue following standard lot allocations.";
+    }
+  }
 
   // Cumulative PnL data for Charting
   const chartData = [...trades]
@@ -157,13 +315,13 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-8 animate-fade-in pb-12">
       {/* Top Banner Actions */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl">Performance Dashboard</h2>
           <p className="mt-1.5 text-sm text-slate-400">
-            Real-time trade metrics parsed and audited by AI trading model.
+            Real-time trade metrics parsed and audited by TradeMind AI.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -196,7 +354,7 @@ export default function DashboardPage() {
             </Link>
             <Link 
               href="/mentor" 
-              className="rounded-xl border border-slate-800 bg-slate-950/45 px-5 py-3 text-sm font-semibold text-slate-300 hover:bg-slate-900"
+              className="rounded-xl border border-slate-800 bg-slate-950/45 px-5 py-3 text-sm font-semibold text-slate-350 hover:bg-slate-900"
             >
               Talk to AI Coach
             </Link>
@@ -274,8 +432,279 @@ export default function DashboardPage() {
               </div>
             </div>
 
+            {/* AI Performance Report Card (GRADE GRID) */}
+            <div className="glass-panel rounded-3xl p-6 shadow-xl flex flex-col justify-between border border-violet-500/10">
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-violet-400 animate-float" />
+                    AI Mentor Report Card
+                  </h3>
+                  <span className="text-[10px] uppercase font-bold tracking-widest bg-violet-600/10 text-violet-400 px-2 py-0.5 rounded border border-violet-500/20">
+                    Live Score
+                  </span>
+                </div>
+
+                {/* Card Grades Grid */}
+                <div className="grid grid-cols-3 gap-3 mb-6">
+                  {/* Discipline */}
+                  <div className="bg-slate-950/45 border border-slate-900 rounded-2xl p-3 text-center">
+                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Discipline</p>
+                    <p className={`text-2xl font-black mt-2 ${disciplineGradeColor}`}>{disciplineGrade}</p>
+                    <span className="text-[8px] text-slate-500 mt-1 block">
+                      {avgDisciplineScore !== null ? `${avgDisciplineScore.toFixed(1)}/10` : "N/A"}
+                    </span>
+                  </div>
+
+                  {/* RR Spacing */}
+                  <div className="bg-slate-950/45 border border-slate-900 rounded-2xl p-3 text-center">
+                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Risk:Reward</p>
+                    <p className={`text-2xl font-black mt-2 ${rrGradeColor}`}>{rrGrade}</p>
+                    <span className="text-[8px] text-slate-500 mt-1 block">{avgRR}</span>
+                  </div>
+
+                  {/* Win Consistency */}
+                  <div className="bg-slate-950/45 border border-slate-900 rounded-2xl p-3 text-center">
+                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Consistency</p>
+                    <p className={`text-2xl font-black mt-2 ${consistencyGradeColor}`}>{consistencyGrade}</p>
+                    <span className="text-[8px] text-slate-500 mt-1 block">{winRate}% WR</span>
+                  </div>
+                </div>
+
+                {/* AI Advice */}
+                <div className="bg-violet-950/10 border border-violet-500/10 rounded-2xl p-4 text-xs leading-relaxed text-slate-300">
+                  {aiReportTip}
+                </div>
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-slate-900/60 flex items-center justify-between text-xs">
+                <span className="text-slate-500 font-semibold">Workspace Health:</span>
+                <span className="font-bold text-emerald-400 flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Fully Optimized
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* ADVANCED SUITE: Pre-Trade Checklist & Risk Calculator */}
+          <div className="grid gap-6 md:grid-cols-2">
+            
+            {/* 📋 Pre-Trade Checklist */}
+            <div className="glass-panel rounded-3xl p-6 shadow-xl flex flex-col justify-between border border-violet-500/10">
+              <div>
+                <div className="flex items-center justify-between mb-4 border-b border-slate-900/60 pb-3">
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-violet-400" />
+                    Pre-Trade Strategy Checklist
+                  </h3>
+                  <button 
+                    onClick={resetChecklist} 
+                    className="text-xs text-slate-500 hover:text-slate-350 flex items-center gap-1 font-semibold transition"
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                    Reset
+                  </button>
+                </div>
+
+                <p className="text-xs text-slate-400 leading-relaxed mb-4.5">
+                  Check all standard system requirements before pushing execution triggers to eliminate impulse behaviors.
+                </p>
+
+                {/* Checklist options */}
+                <div className="space-y-3">
+                  {/* Option 1 */}
+                  <label className="flex items-start gap-3 bg-slate-950/40 border border-slate-900 p-3 rounded-xl cursor-pointer hover:border-slate-800 transition">
+                    <input 
+                      type="checkbox" 
+                      checked={checklist.trendAligned}
+                      onChange={(e) => setChecklist({ ...checklist, trendAligned: e.target.checked })}
+                      className="mt-0.5 rounded text-violet-600 focus:ring-violet-500 accent-violet-600 h-4 w-4 bg-slate-900 border-slate-800"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-slate-200">📈 Higher Timeframe Trend Alignment</span>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Execution is verified to be in the direction of major Daily/4H structures.</p>
+                    </div>
+                  </label>
+
+                  {/* Option 2 */}
+                  <label className="flex items-start gap-3 bg-slate-950/40 border border-slate-900 p-3 rounded-xl cursor-pointer hover:border-slate-800 transition">
+                    <input 
+                      type="checkbox" 
+                      checked={checklist.keyZone}
+                      onChange={(e) => setChecklist({ ...checklist, keyZone: e.target.checked })}
+                      className="mt-0.5 rounded text-violet-600 focus:ring-violet-500 accent-violet-600 h-4 w-4 bg-slate-900 border-slate-800"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-slate-200">🎯 Key Supply/Demand Zone</span>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Trade entry lies directly at a key Support/Resistance structure or Order Block.</p>
+                    </div>
+                  </label>
+
+                  {/* Option 3 */}
+                  <label className="flex items-start gap-3 bg-slate-950/40 border border-slate-900 p-3 rounded-xl cursor-pointer hover:border-slate-800 transition">
+                    <input 
+                      type="checkbox" 
+                      checked={checklist.riskDefined}
+                      onChange={(e) => setChecklist({ ...checklist, riskDefined: e.target.checked })}
+                      className="mt-0.5 rounded text-violet-600 focus:ring-violet-500 accent-violet-600 h-4 w-4 bg-slate-900 border-slate-800"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-slate-200">🛡️ Defined Stop-Loss & Risk &lt; 2%</span>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Stop loss is placed at an invalidation point. Total loss potential is audited.</p>
+                    </div>
+                  </label>
+
+                  {/* Option 4 */}
+                  <label className="flex items-start gap-3 bg-slate-950/40 border border-slate-900 p-3 rounded-xl cursor-pointer hover:border-slate-800 transition">
+                    <input 
+                      type="checkbox" 
+                      checked={checklist.timeframeConfirm}
+                      onChange={(e) => setChecklist({ ...checklist, timeframeConfirm: e.target.checked })}
+                      className="mt-0.5 rounded text-violet-600 focus:ring-violet-500 accent-violet-600 h-4 w-4 bg-slate-900 border-slate-800"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-slate-200">⏳ Candlestick Trigger Confirmation</span>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Wait for a candle close (e.g. rejection wick, engulfing bar) on the execution chart.</p>
+                    </div>
+                  </label>
+
+                  {/* Option 5 */}
+                  <label className="flex items-start gap-3 bg-slate-950/40 border border-slate-900 p-3 rounded-xl cursor-pointer hover:border-slate-800 transition">
+                    <input 
+                      type="checkbox" 
+                      checked={checklist.emotionsChecked}
+                      onChange={(e) => setChecklist({ ...checklist, emotionsChecked: e.target.checked })}
+                      className="mt-0.5 rounded text-violet-600 focus:ring-violet-500 accent-violet-600 h-4 w-4 bg-slate-900 border-slate-800"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-slate-200">🧘 Psychological Stability Audit</span>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Mind is detached from previous wins/losses. Zero revenge or FOMO impulse.</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Checklist visual score result */}
+              <div className="mt-6 flex items-center justify-between p-4 rounded-2xl bg-slate-950/60 border border-slate-900">
+                <div>
+                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wide">Readiness Rating</span>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-lg font-black text-white">{checklistPercentage}%</span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                      checklistPercentage === 100 
+                        ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20" 
+                        : "bg-slate-900 text-slate-500"
+                    }`}>
+                      {checklistPercentage === 100 ? "Ready to Execute!" : "Checklist Incomplete"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Progress bar visual */}
+                <div className="w-24 h-2 bg-slate-900 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-violet-600 rounded-full transition-all duration-300"
+                    style={{ width: `${checklistPercentage}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 🧮 Live Position Size & Risk Calculator */}
+            <div className="glass-panel rounded-3xl p-6 shadow-xl flex flex-col justify-between border border-violet-500/10">
+              <div>
+                <div className="flex items-center justify-between mb-4 border-b border-slate-900/60 pb-3">
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <Calculator className="h-5 w-5 text-violet-400" />
+                    Position Size & Risk Calculator
+                  </h3>
+                  <span className="text-[10px] font-bold text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded">
+                    Real-time Math
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-400 leading-relaxed mb-4.5">
+                  Calculate the exact lot size to input on your MT4/MT5/TradingView terminals instantly to keep precise capital allocations.
+                </p>
+
+                {/* Calculator Inputs Grid */}
+                <div className="space-y-4">
+                  
+                  {/* Row 1 */}
+                  <div className="grid gap-4 grid-cols-2">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Account Size ($)</label>
+                      <input 
+                        type="number"
+                        value={calc.balance}
+                        onChange={(e) => setCalc({ ...calc, balance: Math.max(0, parseFloat(e.target.value) || 0) })}
+                        className="block w-full rounded-xl border border-slate-900 bg-slate-950/45 px-3 py-2.5 text-white placeholder-slate-500 shadow-sm focus:border-violet-500 focus:outline-none text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Risk Limit (%)</label>
+                      <input 
+                        type="number"
+                        step="0.1"
+                        value={calc.riskPercent}
+                        onChange={(e) => setCalc({ ...calc, riskPercent: Math.max(0, parseFloat(e.target.value) || 0) })}
+                        className="block w-full rounded-xl border border-slate-900 bg-slate-950/45 px-3 py-2.5 text-white placeholder-slate-500 shadow-sm focus:border-violet-500 focus:outline-none text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Row 2 */}
+                  <div className="grid gap-4 grid-cols-2">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Stop Loss (Pips/Points)</label>
+                      <input 
+                        type="number"
+                        value={calc.stopLossPips}
+                        onChange={(e) => setCalc({ ...calc, stopLossPips: Math.max(1, parseFloat(e.target.value) || 0) })}
+                        className="block w-full rounded-xl border border-slate-900 bg-slate-950/45 px-3 py-2.5 text-white placeholder-slate-500 shadow-sm focus:border-violet-500 focus:outline-none text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Asset Type</label>
+                      <select 
+                        value={calc.assetType}
+                        onChange={(e) => setCalc({ ...calc, assetType: e.target.value })}
+                        className="block w-full rounded-xl border border-slate-900 bg-slate-950/45 px-3 py-2.5 text-white shadow-sm focus:border-violet-500 focus:outline-none text-xs"
+                      >
+                        <option value="Forex">Forex (EUR/GBP/JPY)</option>
+                        <option value="Gold">Gold (XAUUSD)</option>
+                        <option value="Crypto">Crypto (BTC/ETH)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Calculator Output Grid */}
+              <div className="mt-6 grid grid-cols-2 gap-4 border-t border-slate-900 pt-5">
+                <div className="bg-slate-950/60 border border-slate-900 rounded-2xl p-4 text-center">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Total Cash At Risk</span>
+                  <p className="text-xl font-black text-rose-450 mt-1">${dollarRisk.toLocaleString()}</p>
+                  <span className="text-[8px] text-slate-500 block mt-0.5">({calc.riskPercent}% size)</span>
+                </div>
+
+                <div className="bg-slate-950/60 border border-violet-500/10 rounded-2xl p-4 text-center">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Recommended Position</span>
+                  <p className="text-xl font-black text-violet-400 mt-1">{lotSizeOutput} Lots</p>
+                  <span className="text-[8px] text-slate-500 block mt-0.5">
+                    {calc.assetType === "Crypto" ? "Units" : "Standard Lots"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Asset Analytics & Quick Insight */}
+          <div className="grid gap-6 lg:grid-cols-3">
             {/* Pairs Stats Card */}
-            <div className="glass-panel rounded-3xl p-6 shadow-xl flex flex-col justify-between">
+            <div className="glass-panel rounded-3xl p-6 shadow-xl flex flex-col justify-between lg:col-span-1">
               <div>
                 <h3 className="text-lg font-bold text-white mb-6">Asset Analytics</h3>
                 
@@ -327,63 +756,63 @@ export default function DashboardPage() {
                 </p>
               </div>
             </div>
-          </div>
 
-          {/* Recent Trades Snapshot Table */}
-          <div className="glass-panel rounded-3xl p-6 shadow-xl">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-white">Recent Logged Entries</h3>
-              <Link href="/journal" className="flex items-center gap-1.5 text-sm font-semibold text-violet-400 hover:text-violet-300">
-                View full journal
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </div>
+            {/* Recent Trades Snapshot Table (Span 2) */}
+            <div className="glass-panel rounded-3xl p-6 shadow-xl lg:col-span-2">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-white">Recent Logged Entries</h3>
+                <Link href="/journal" className="flex items-center gap-1.5 text-sm font-semibold text-violet-400 hover:text-violet-300">
+                  View full journal
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-900 text-xs font-bold uppercase tracking-wider text-slate-500">
-                    <th className="py-3 px-4">Date</th>
-                    <th className="py-3 px-4">Asset</th>
-                    <th className="py-3 px-4">Type</th>
-                    <th className="py-3 px-4">Lot Size</th>
-                    <th className="py-3 px-4 text-right">PnL Amount</th>
-                    <th className="py-3 px-4 text-center">Result</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-900/60 text-sm">
-                  {trades.slice(0, 5).map((trade) => (
-                    <tr key={trade.id} className="hover:bg-slate-900/30 transition-colors">
-                      <td className="py-3.5 px-4 text-slate-400">
-                        {new Date(trade.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                      </td>
-                      <td className="py-3.5 px-4 font-bold text-white">{trade.pair}</td>
-                      <td className="py-3.5 px-4">
-                        <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                          trade.type === "BUY" ? "bg-emerald-500/10 text-emerald-400" : "bg-blue-500/10 text-blue-400"
-                        }`}>
-                          {trade.type}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 font-medium text-slate-300">{trade.lotSize}</td>
-                      <td className={`py-3.5 px-4 text-right font-bold ${
-                        trade.pnl >= 0 ? "text-emerald-400" : "text-rose-400"
-                      }`}>
-                        {trade.pnl >= 0 ? "+" : ""}${trade.pnl.toFixed(2)}
-                      </td>
-                      <td className="py-3.5 px-4 text-center">
-                        <span className={`px-2 py-0.5 rounded text-xs font-bold ${
-                          trade.result === "WIN" 
-                            ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20" 
-                            : "bg-rose-500/15 text-rose-400 border border-rose-500/20"
-                        }`}>
-                          {trade.result}
-                        </span>
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-900 text-xs font-bold uppercase tracking-wider text-slate-500">
+                      <th className="py-3 px-4">Date</th>
+                      <th className="py-3 px-4">Asset</th>
+                      <th className="py-3 px-4">Type</th>
+                      <th className="py-3 px-4">Lot Size</th>
+                      <th className="py-3 px-4 text-right">PnL Amount</th>
+                      <th className="py-3 px-4 text-center">Result</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-900/60 text-sm">
+                    {trades.slice(0, 5).map((trade) => (
+                      <tr key={trade.id} className="hover:bg-slate-900/30 transition-colors">
+                        <td className="py-3.5 px-4 text-slate-400">
+                          {new Date(trade.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        </td>
+                        <td className="py-3.5 px-4 font-bold text-white">{trade.pair}</td>
+                        <td className="py-3.5 px-4">
+                          <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                            trade.type === "BUY" ? "bg-emerald-500/10 text-emerald-400" : "bg-blue-500/10 text-blue-400"
+                          }`}>
+                            {trade.type}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 font-medium text-slate-300">{trade.lotSize}</td>
+                        <td className={`py-3.5 px-4 text-right font-bold ${
+                          trade.pnl >= 0 ? "text-emerald-400" : "text-rose-400"
+                        }`}>
+                          {trade.pnl >= 0 ? "+" : ""}${trade.pnl.toFixed(2)}
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                            trade.result === "WIN" 
+                              ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20" 
+                              : "bg-rose-500/15 text-rose-400 border border-rose-500/20"
+                          }`}>
+                            {trade.result}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </>
