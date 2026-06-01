@@ -18,8 +18,13 @@ import {
   Calculator,
   AlertCircle,
   RefreshCw,
-  FileSpreadsheet,
-  BrainCircuit
+  Clock,
+  Zap,
+  Calendar,
+  Coins,
+  ChevronRight,
+  TrendingUp as StrengthUp,
+  LineChart
 } from "lucide-react";
 import { 
   AreaChart, 
@@ -54,10 +59,31 @@ interface PsychologyLog {
   createdAt: string;
 }
 
+interface CryptoTicker {
+  symbol: string;
+  name: string;
+  logo: string;
+  price: number;
+  change: number;
+  status: "up" | "down" | "stable";
+}
+
+interface LiveOrder {
+  id: string;
+  pair: string;
+  type: "BUY" | "SELL";
+  amount: string;
+  price: string;
+  time: string;
+}
+
 export default function DashboardPage() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [logs, setLogs] = useState<PsychologyLog[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Time for Global Sessions Clocks
+  const [time, setTime] = useState<Date | null>(null);
 
   // Pre-Trade Strategy Checklist State
   const [checklist, setChecklist] = useState({
@@ -76,7 +102,40 @@ export default function DashboardPage() {
     assetType: "Forex", // "Forex" | "Gold" | "Crypto"
   });
 
+  // Currency Strength Meter values
+  const [strengths, setStrengths] = useState({
+    USD: 82,
+    EUR: 64,
+    GBP: 71,
+    JPY: 18,
+    CAD: 55,
+    AUD: 43
+  });
+
+  // Binance-Style Ticking Crypto Tickers State
+  const [tickers, setTickers] = useState<CryptoTicker[]>([
+    { symbol: "BTC/USDT", name: "Bitcoin", logo: "🟠", price: 67250.00, change: 2.45, status: "stable" },
+    { symbol: "ETH/USDT", name: "Ethereum", logo: "🔷", price: 3485.50, change: 1.82, status: "stable" },
+    { symbol: "SOL/USDT", name: "Solana", logo: "🟣", price: 168.20, change: -4.12, status: "stable" },
+    { symbol: "BNB/USDT", name: "BNB", logo: "🟡", price: 592.40, change: 0.95, status: "stable" },
+    { symbol: "XRP/USDT", name: "Ripple", logo: "🟢", price: 0.528, change: -1.05, status: "stable" }
+  ]);
+
+  // Live High-Frequency Trade executions (order book)
+  const [liveOrders, setLiveOrders] = useState<LiveOrder[]>([
+    { id: "1", pair: "BTC/USDT", type: "BUY", amount: "0.245", price: "67,250.00", time: "01:00:10" },
+    { id: "2", pair: "ETH/USDT", type: "SELL", amount: "1.840", price: "3,485.50", time: "01:00:08" },
+    { id: "3", pair: "SOL/USDT", type: "BUY", amount: "22.50", price: "168.20", time: "01:00:05" },
+    { id: "4", pair: "BTC/USDT", type: "BUY", amount: "0.085", price: "67,249.20", time: "01:00:02" },
+    { id: "5", pair: "BNB/USDT", type: "SELL", amount: "4.120", price: "592.40", time: "01:00:00" }
+  ]);
+
   useEffect(() => {
+    setTime(new Date());
+    const interval = setInterval(() => {
+      setTime(new Date());
+    }, 1000);
+
     async function loadDashboardData() {
       try {
         const [tradesRes, logsRes] = await Promise.all([
@@ -98,7 +157,79 @@ export default function DashboardPage() {
         setLoading(false);
       }
     }
+
     loadDashboardData();
+
+    // 1. Live strength meter shuffle loop
+    const strInterval = setInterval(() => {
+      setStrengths(prev => ({
+        USD: Math.min(100, Math.max(0, prev.USD + Math.floor(Math.random() * 5 - 2.5))),
+        EUR: Math.min(100, Math.max(0, prev.EUR + Math.floor(Math.random() * 5 - 2.5))),
+        GBP: Math.min(100, Math.max(0, prev.GBP + Math.floor(Math.random() * 5 - 2.5))),
+        JPY: Math.min(100, Math.max(0, prev.JPY + Math.floor(Math.random() * 3 - 1.5))),
+        CAD: Math.min(100, Math.max(0, prev.CAD + Math.floor(Math.random() * 5 - 2.5))),
+        AUD: Math.min(100, Math.max(0, prev.AUD + Math.floor(Math.random() * 5 - 2.5))),
+      }));
+    }, 4000);
+
+    // 2. Binance-Style price ticking loop (shuffles and blinks prices)
+    const tickInterval = setInterval(() => {
+      setTickers(prev => prev.map(t => {
+        const percentChange = (Math.random() * 0.1 - 0.05); // Price swing
+        const isUp = percentChange > 0;
+        const newPrice = t.price * (1 + percentChange);
+        const newChange = t.change + (percentChange * 100);
+
+        return {
+          ...t,
+          price: parseFloat(newPrice.toFixed(t.symbol.includes("XRP") ? 4 : 2)),
+          change: parseFloat(newChange.toFixed(2)),
+          status: isUp ? "up" : "down"
+        };
+      }));
+
+      // Reset blink state to stable after 350ms
+      setTimeout(() => {
+        setTickers(prev => prev.map(t => ({ ...t, status: "stable" })));
+      }, 350);
+    }, 2500);
+
+    // 3. Binance-Style high-frequency live executions order loop
+    const orderInterval = setInterval(() => {
+      const cryptoAssets = [
+        { symbol: "BTC/USDT", price: 67250, decimals: 2, sizeUnit: "BTC" },
+        { symbol: "ETH/USDT", price: 3485, decimals: 2, sizeUnit: "ETH" },
+        { symbol: "SOL/USDT", price: 168, decimals: 2, sizeUnit: "SOL" },
+        { symbol: "BNB/USDT", price: 592, decimals: 2, sizeUnit: "BNB" },
+        { symbol: "XRP/USDT", price: 0.528, decimals: 3, sizeUnit: "XRP" }
+      ];
+
+      const selected = cryptoAssets[Math.floor(Math.random() * cryptoAssets.length)];
+      const type = Math.random() > 0.48 ? "BUY" : "SELL";
+      const sizeMultiplier = selected.symbol.includes("BTC") ? 0.4 : selected.symbol.includes("ETH") ? 2.5 : 30;
+      const amount = (Math.random() * sizeMultiplier + 0.01).toFixed(selected.symbol.includes("BTC") ? 3 : 2);
+      
+      const priceVariation = selected.price * (1 + (Math.random() * 0.002 - 0.001));
+      const price = priceVariation.toLocaleString(undefined, { minimumFractionDigits: selected.decimals, maximumFractionDigits: selected.decimals });
+
+      const newOrder: LiveOrder = {
+        id: Math.random().toString(),
+        pair: selected.symbol,
+        type,
+        amount,
+        price,
+        time: new Date().toLocaleTimeString(undefined, { hour12: false })
+      };
+
+      setLiveOrders(prev => [newOrder, ...prev.slice(0, 4)]);
+    }, 2000);
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(strInterval);
+      clearInterval(tickInterval);
+      clearInterval(orderInterval);
+    };
   }, []);
 
   // Reset Checklist
@@ -122,13 +253,10 @@ export default function DashboardPage() {
 
   if (calc.stopLossPips > 0) {
     if (calc.assetType === "Forex") {
-      // Standard Forex math: 1 standard lot is 100,000 units. 1 pip is $10 at 1.00 lot.
       calculatedLotSize = dollarRisk / (calc.stopLossPips * 10);
     } else if (calc.assetType === "Gold") {
-      // Standard Gold (XAUUSD) math: 1 standard lot represents 100 oz. 1 pip/point difference is $10 at 1.00 lot.
       calculatedLotSize = dollarRisk / (calc.stopLossPips * 10);
     } else if (calc.assetType === "Crypto") {
-      // Crypto position sizing (e.g. BTCUSD): Lot size = Dollar risk / stop loss difference (points)
       calculatedLotSize = dollarRisk / calc.stopLossPips;
     }
   }
@@ -173,7 +301,6 @@ export default function DashboardPage() {
     : "N/A";
 
   // Dynamic AI Grading Scale Calculations
-  // 1. Discipline Index Grade (From psychology logs avg discipline score)
   const avgDisciplineScore = logs.length > 0 
     ? logs.reduce((sum, l) => sum + l.disciplineScore, 0) / logs.length
     : null;
@@ -199,7 +326,7 @@ export default function DashboardPage() {
     }
   }
 
-  // 2. Risk-to-Reward Grade (From trades actual SL vs TP ratios)
+  // Risk Reward Grade
   let rrGrade = "B";
   let rrGradeColor = "text-violet-400";
   if (totalTrades > 0) {
@@ -221,7 +348,7 @@ export default function DashboardPage() {
     }
   }
 
-  // 3. Consistency Grade (From overall Win Rate)
+  // Consistency Grade
   let consistencyGrade = "C";
   let consistencyGradeColor = "text-yellow-400";
   if (totalTrades > 0) {
@@ -240,7 +367,6 @@ export default function DashboardPage() {
     }
   }
 
-  // AI Recommendation based on grading outcomes
   let aiReportTip = "Log your first few trades and psychology logs to enable standard cognitive pattern evaluations.";
   if (totalTrades > 0 || logs.length > 0) {
     if (disciplineGrade === "D" || disciplineGrade === "C") {
@@ -266,10 +392,49 @@ export default function DashboardPage() {
       return acc;
     }, []);
 
-  // Add initial zero point if data exists
   if (chartData.length > 0) {
     chartData.unshift({ date: "Start", pnl: 0 });
   }
+
+  // Forex Sessions Clocks UTC mapping
+  const getSessionTime = (utcOffset: number) => {
+    if (!time) return "00:00:00 AM";
+    const utcTime = time.getTime() + (time.getTimezoneOffset() * 60000);
+    const targetTime = new Date(utcTime + (3600000 * utcOffset));
+    return targetTime.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true });
+  };
+
+  const getSessionActiveStatus = (sessionName: string) => {
+    if (!time) return false;
+    const utcHour = new Date(time.getTime() + (time.getTimezoneOffset() * 60000)).getUTCHours();
+    
+    if (sessionName === "Tokyo") {
+      return utcHour >= 0 && utcHour < 9;
+    } else if (sessionName === "London") {
+      return utcHour >= 8 && utcHour < 16;
+    } else if (sessionName === "New York") {
+      return utcHour >= 13 && utcHour < 21;
+    } else if (sessionName === "Sydney") {
+      return utcHour >= 22 || utcHour < 6;
+    }
+    return false;
+  };
+
+  const sessions = [
+    { name: "Sydney", flag: "🇦🇺", offset: 10 },
+    { name: "Tokyo", flag: "🇯🇵", offset: 9 },
+    { name: "London", flag: "🇬🇧", offset: 1 },
+    { name: "New York", flag: "🇺🇸", offset: -4 }
+  ];
+
+  // Economic News events
+  const economicEvents = [
+    { title: "CPI Inflation Rate YoY", currency: "USD", impact: "HIGH", forecast: "3.1%", previous: "3.4%", time: "1:30 PM" },
+    { title: "FOMC Federal Funds Rate", currency: "USD", impact: "HIGH", forecast: "5.25%", previous: "5.25%", time: "7:00 PM" },
+    { title: "Unemployment Claims", currency: "USD", impact: "MEDIUM", forecast: "215K", previous: "210K", time: "1:30 PM" },
+    { title: "BoE Interest Rate Decision", currency: "GBP", impact: "HIGH", forecast: "5.00%", previous: "5.25%", time: "11:00 AM" },
+    { title: "PMI Manufacturing Index", currency: "EUR", impact: "MEDIUM", forecast: "48.2", previous: "47.8", time: "8:00 AM" }
+  ];
 
   const kpis = [
     { 
@@ -315,7 +480,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-8 animate-fade-in pb-12">
+    <div className="space-y-8 animate-fade-in pb-16 select-none">
       {/* Top Banner Actions */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -383,6 +548,123 @@ export default function DashboardPage() {
             })}
           </div>
 
+          {/* 🌐 LIVE FOREX COMMAND CENTER ROW */}
+          <div className="grid gap-6 lg:grid-cols-3">
+            
+            {/* Clocks & Sessions Card */}
+            <div className="glass-panel rounded-3xl p-6 shadow-xl flex flex-col justify-between border border-violet-500/10 lg:col-span-1">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2 mb-4.5 border-b border-slate-900/60 pb-3">
+                  <Clock className="h-5 w-5 text-violet-400 animate-float" />
+                  Live Forex Sessions
+                </h3>
+
+                <div className="space-y-4">
+                  {sessions.map((s) => {
+                    const isActive = getSessionActiveStatus(s.name);
+                    return (
+                      <div 
+                        key={s.name} 
+                        className={`flex items-center justify-between p-3.5 rounded-xl border transition-all ${
+                          isActive 
+                            ? "bg-violet-950/15 border-violet-500/30 shadow-sm" 
+                            : "bg-slate-950/30 border-slate-900/60"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-xl shrink-0">{s.flag}</span>
+                          <div>
+                            <p className="text-xs font-bold text-white uppercase">{s.name}</p>
+                            <p className="text-[10px] text-slate-550 mt-0.5">Session Offset</p>
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <p className="text-xs font-mono font-bold text-slate-200">{getSessionTime(s.offset)}</p>
+                          <span className={`inline-flex items-center gap-1 text-[8px] font-extrabold uppercase mt-1 px-1.5 py-0.5 rounded ${
+                            isActive ? "bg-emerald-500/10 text-emerald-400" : "bg-slate-900 text-slate-500"
+                          }`}>
+                            <span className={`h-1 w-1 rounded-full ${isActive ? "bg-emerald-400 animate-pulse" : "bg-slate-500"}`} />
+                            {isActive ? "Active" : "Closed"}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="mt-4 p-3 rounded-xl bg-slate-950/40 border border-slate-900/80 text-[10px] text-slate-400 leading-relaxed">
+                <span className="font-bold text-violet-400">💡 London & NY Overlap:</span> High market volume occurs between <span className="font-bold text-white">1:00 PM to 4:00 PM UTC</span>. Target breakouts during this overlap.
+              </div>
+            </div>
+
+            {/* Economic News Calendar (Col span 2) */}
+            <div className="glass-panel rounded-3xl p-6 shadow-xl border border-violet-500/10 lg:col-span-2 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-4.5 border-b border-slate-900/60 pb-3">
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <Calendar className="h-5 w-5 text-violet-400" />
+                    Macro Economic Calendar
+                  </h3>
+                  <span className="text-[10px] font-bold text-rose-450 bg-rose-500/10 px-2.5 py-0.5 rounded border border-rose-500/20">
+                    High Volatility Alert
+                  </span>
+                </div>
+
+                <div className="space-y-3.5">
+                  {economicEvents.map((e, idx) => (
+                    <div 
+                      key={idx} 
+                      className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-2xl bg-slate-950/45 border border-slate-900/60 hover:border-slate-800 transition gap-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className={`flex h-8 w-8 items-center justify-center rounded-lg text-[10px] font-black ${
+                          e.impact === "HIGH" 
+                            ? "bg-rose-500/10 text-rose-400 border border-rose-500/20" 
+                            : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                        }`}>
+                          {e.currency}
+                        </span>
+                        <div>
+                          <p className="text-xs font-bold text-white">{e.title}</p>
+                          <p className="text-[9px] text-slate-500 mt-0.5">Estimated Impact Zone • {e.time}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-6">
+                        <div className="text-left sm:text-right">
+                          <span className="text-[9px] font-semibold text-slate-500 uppercase tracking-wider block">Forecast</span>
+                          <span className="text-xs font-bold text-slate-350">{e.forecast}</span>
+                        </div>
+                        <div className="text-left sm:text-right">
+                          <span className="text-[9px] font-semibold text-slate-500 uppercase tracking-wider block">Previous</span>
+                          <span className="text-xs font-bold text-slate-350">{e.previous}</span>
+                        </div>
+                        <div className="text-left sm:text-right">
+                          <span className="text-[9px] font-semibold text-slate-500 uppercase tracking-wider block">Impact</span>
+                          <span className={`text-[9px] font-extrabold uppercase rounded px-2 py-0.5 ${
+                            e.impact === "HIGH" ? "bg-rose-500/10 text-rose-400" : "bg-amber-500/10 text-amber-400"
+                          }`}>
+                            {e.impact}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-5 flex items-center gap-2 p-3.5 rounded-2xl bg-rose-950/10 border border-rose-500/15 text-xs text-rose-400">
+                <AlertCircle className="h-4.5 w-4.5 shrink-0" />
+                <p className="leading-relaxed">
+                  <span className="font-extrabold uppercase text-[10px] tracking-wider">AI Risk Warning:</span> High-impact calendar items active today. TradeMind AI advises setting pending orders to break-even or reducing position sizes.
+                </p>
+              </div>
+            </div>
+
+          </div>
+
           {/* Interactive Chart & Pair breakdown */}
           <div className="grid gap-6 lg:grid-cols-3">
             {/* Area PnL Chart */}
@@ -445,7 +727,6 @@ export default function DashboardPage() {
                   </span>
                 </div>
 
-                {/* Card Grades Grid */}
                 <div className="grid grid-cols-3 gap-3 mb-6">
                   {/* Discipline */}
                   <div className="bg-slate-950/45 border border-slate-900 rounded-2xl p-3 text-center">
@@ -471,7 +752,6 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {/* AI Advice */}
                 <div className="bg-violet-950/10 border border-violet-500/10 rounded-2xl p-4 text-xs leading-relaxed text-slate-300">
                   {aiReportTip}
                 </div>
@@ -487,122 +767,109 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* ADVANCED SUITE: Pre-Trade Checklist & Risk Calculator */}
-          <div className="grid gap-6 md:grid-cols-2">
+          {/* ADVANCED SUITE: Pre-Trade Checklist & Risk Calculator & Strength Meter */}
+          <div className="grid gap-6 md:grid-cols-3">
             
             {/* 📋 Pre-Trade Checklist */}
-            <div className="glass-panel rounded-3xl p-6 shadow-xl flex flex-col justify-between border border-violet-500/10">
+            <div className="glass-panel rounded-3xl p-6 shadow-xl flex flex-col justify-between border border-violet-500/10 md:col-span-1">
               <div>
                 <div className="flex items-center justify-between mb-4 border-b border-slate-900/60 pb-3">
-                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
                     <CheckCircle2 className="h-5 w-5 text-violet-400" />
-                    Pre-Trade Strategy Checklist
+                    Pre-Trade Checklist
                   </h3>
                   <button 
                     onClick={resetChecklist} 
-                    className="text-xs text-slate-500 hover:text-slate-350 flex items-center gap-1 font-semibold transition"
+                    className="text-xs text-slate-500 hover:text-slate-355 flex items-center gap-1 font-semibold transition"
                   >
                     <RefreshCw className="h-3 w-3" />
                     Reset
                   </button>
                 </div>
 
-                <p className="text-xs text-slate-400 leading-relaxed mb-4.5">
-                  Check all standard system requirements before pushing execution triggers to eliminate impulse behaviors.
-                </p>
-
-                {/* Checklist options */}
-                <div className="space-y-3">
-                  {/* Option 1 */}
-                  <label className="flex items-start gap-3 bg-slate-950/40 border border-slate-900 p-3 rounded-xl cursor-pointer hover:border-slate-800 transition">
+                <div className="space-y-2.5">
+                  <label className="flex items-start gap-2.5 bg-slate-950/40 border border-slate-900 p-2.5 rounded-xl cursor-pointer hover:border-slate-800 transition">
                     <input 
                       type="checkbox" 
                       checked={checklist.trendAligned}
                       onChange={(e) => setChecklist({ ...checklist, trendAligned: e.target.checked })}
-                      className="mt-0.5 rounded text-violet-600 focus:ring-violet-500 accent-violet-600 h-4 w-4 bg-slate-900 border-slate-800"
+                      className="mt-0.5 rounded text-violet-600 accent-violet-600 h-3.5 w-3.5"
                     />
                     <div>
-                      <span className="text-xs font-bold text-slate-200">📈 Higher Timeframe Trend Alignment</span>
-                      <p className="text-[10px] text-slate-400 mt-0.5">Execution is verified to be in the direction of major Daily/4H structures.</p>
+                      <span className="text-[11px] font-bold text-slate-200">HTF Trend Aligned</span>
+                      <p className="text-[9px] text-slate-500 mt-0.5">Execution runs with major Daily structures.</p>
                     </div>
                   </label>
 
-                  {/* Option 2 */}
-                  <label className="flex items-start gap-3 bg-slate-950/40 border border-slate-900 p-3 rounded-xl cursor-pointer hover:border-slate-800 transition">
+                  <label className="flex items-start gap-2.5 bg-slate-950/40 border border-slate-900 p-2.5 rounded-xl cursor-pointer hover:border-slate-800 transition">
                     <input 
                       type="checkbox" 
                       checked={checklist.keyZone}
                       onChange={(e) => setChecklist({ ...checklist, keyZone: e.target.checked })}
-                      className="mt-0.5 rounded text-violet-600 focus:ring-violet-500 accent-violet-600 h-4 w-4 bg-slate-900 border-slate-800"
+                      className="mt-0.5 rounded text-violet-600 accent-violet-600 h-3.5 w-3.5"
                     />
                     <div>
-                      <span className="text-xs font-bold text-slate-200">🎯 Key Supply/Demand Zone</span>
-                      <p className="text-[10px] text-slate-400 mt-0.5">Trade entry lies directly at a key Support/Resistance structure or Order Block.</p>
+                      <span className="text-[11px] font-bold text-slate-200">Key Supply/Demand Zone</span>
+                      <p className="text-[9px] text-slate-500 mt-0.5">Price sits inside S/R or block triggers.</p>
                     </div>
                   </label>
 
-                  {/* Option 3 */}
-                  <label className="flex items-start gap-3 bg-slate-950/40 border border-slate-900 p-3 rounded-xl cursor-pointer hover:border-slate-800 transition">
+                  <label className="flex items-start gap-2.5 bg-slate-950/40 border border-slate-900 p-2.5 rounded-xl cursor-pointer hover:border-slate-800 transition">
                     <input 
                       type="checkbox" 
                       checked={checklist.riskDefined}
                       onChange={(e) => setChecklist({ ...checklist, riskDefined: e.target.checked })}
-                      className="mt-0.5 rounded text-violet-600 focus:ring-violet-500 accent-violet-600 h-4 w-4 bg-slate-900 border-slate-800"
+                      className="mt-0.5 rounded text-violet-600 accent-violet-600 h-3.5 w-3.5"
                     />
                     <div>
-                      <span className="text-xs font-bold text-slate-200">🛡️ Defined Stop-Loss & Risk &lt; 2%</span>
-                      <p className="text-[10px] text-slate-400 mt-0.5">Stop loss is placed at an invalidation point. Total loss potential is audited.</p>
+                      <span className="text-[11px] font-bold text-slate-200">Defined Risk &lt; 2%</span>
+                      <p className="text-[9px] text-slate-500 mt-0.5">Maximum loss capital capped and audited.</p>
                     </div>
                   </label>
 
-                  {/* Option 4 */}
-                  <label className="flex items-start gap-3 bg-slate-950/40 border border-slate-900 p-3 rounded-xl cursor-pointer hover:border-slate-800 transition">
+                  <label className="flex items-start gap-2.5 bg-slate-950/40 border border-slate-900 p-2.5 rounded-xl cursor-pointer hover:border-slate-800 transition">
                     <input 
                       type="checkbox" 
                       checked={checklist.timeframeConfirm}
                       onChange={(e) => setChecklist({ ...checklist, timeframeConfirm: e.target.checked })}
-                      className="mt-0.5 rounded text-violet-600 focus:ring-violet-500 accent-violet-600 h-4 w-4 bg-slate-900 border-slate-800"
+                      className="mt-0.5 rounded text-violet-600 accent-violet-600 h-3.5 w-3.5"
                     />
                     <div>
-                      <span className="text-xs font-bold text-slate-200">⏳ Candlestick Trigger Confirmation</span>
-                      <p className="text-[10px] text-slate-400 mt-0.5">Wait for a candle close (e.g. rejection wick, engulfing bar) on the execution chart.</p>
+                      <span className="text-[11px] font-bold text-slate-200">Candle Confirmation</span>
+                      <p className="text-[9px] text-slate-500 mt-0.5">Engulfing or rejection triggers hit.</p>
                     </div>
                   </label>
 
-                  {/* Option 5 */}
-                  <label className="flex items-start gap-3 bg-slate-950/40 border border-slate-900 p-3 rounded-xl cursor-pointer hover:border-slate-800 transition">
+                  <label className="flex items-start gap-2.5 bg-slate-950/40 border border-slate-900 p-2.5 rounded-xl cursor-pointer hover:border-slate-800 transition">
                     <input 
                       type="checkbox" 
                       checked={checklist.emotionsChecked}
                       onChange={(e) => setChecklist({ ...checklist, emotionsChecked: e.target.checked })}
-                      className="mt-0.5 rounded text-violet-600 focus:ring-violet-500 accent-violet-600 h-4 w-4 bg-slate-900 border-slate-800"
+                      className="mt-0.5 rounded text-violet-600 accent-violet-600 h-3.5 w-3.5"
                     />
                     <div>
-                      <span className="text-xs font-bold text-slate-200">🧘 Psychological Stability Audit</span>
-                      <p className="text-[10px] text-slate-400 mt-0.5">Mind is detached from previous wins/losses. Zero revenge or FOMO impulse.</p>
+                      <span className="text-[11px] font-bold text-slate-200">Mindset Audited</span>
+                      <p className="text-[9px] text-slate-500 mt-0.5">Mind is clear of revenge or greed states.</p>
                     </div>
                   </label>
                 </div>
               </div>
 
-              {/* Checklist visual score result */}
-              <div className="mt-6 flex items-center justify-between p-4 rounded-2xl bg-slate-950/60 border border-slate-900">
+              <div className="mt-4 flex items-center justify-between p-3 rounded-xl bg-slate-950/60 border border-slate-900">
                 <div>
-                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wide">Readiness Rating</span>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-lg font-black text-white">{checklistPercentage}%</span>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                  <span className="text-[8px] text-slate-500 font-bold uppercase tracking-wide">Readiness Rating</span>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-sm font-black text-white">{checklistPercentage}%</span>
+                    <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${
                       checklistPercentage === 100 
                         ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20" 
                         : "bg-slate-900 text-slate-500"
                     }`}>
-                      {checklistPercentage === 100 ? "Ready to Execute!" : "Checklist Incomplete"}
+                      {checklistPercentage === 100 ? "Ready!" : "Incomplete"}
                     </span>
                   </div>
                 </div>
-
-                {/* Progress bar visual */}
-                <div className="w-24 h-2 bg-slate-900 rounded-full overflow-hidden">
+                <div className="w-16 h-1.5 bg-slate-900 rounded-full overflow-hidden">
                   <div 
                     className="h-full bg-violet-600 rounded-full transition-all duration-300"
                     style={{ width: `${checklistPercentage}%` }}
@@ -612,90 +879,224 @@ export default function DashboardPage() {
             </div>
 
             {/* 🧮 Live Position Size & Risk Calculator */}
-            <div className="glass-panel rounded-3xl p-6 shadow-xl flex flex-col justify-between border border-violet-500/10">
+            <div className="glass-panel rounded-3xl p-6 shadow-xl flex flex-col justify-between border border-violet-500/10 md:col-span-1">
               <div>
                 <div className="flex items-center justify-between mb-4 border-b border-slate-900/60 pb-3">
-                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
                     <Calculator className="h-5 w-5 text-violet-400" />
-                    Position Size & Risk Calculator
+                    Risk Calculator
                   </h3>
-                  <span className="text-[10px] font-bold text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded">
-                    Real-time Math
+                  <span className="text-[9px] font-bold text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded">
+                    Dynamic
                   </span>
                 </div>
 
-                <p className="text-xs text-slate-400 leading-relaxed mb-4.5">
-                  Calculate the exact lot size to input on your MT4/MT5/TradingView terminals instantly to keep precise capital allocations.
-                </p>
-
-                {/* Calculator Inputs Grid */}
-                <div className="space-y-4">
-                  
-                  {/* Row 1 */}
-                  <div className="grid gap-4 grid-cols-2">
+                <div className="space-y-3 text-xs">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Balance ($)</label>
+                    <input 
+                      type="number"
+                      value={calc.balance}
+                      onChange={(e) => setCalc({ ...calc, balance: Math.max(0, parseFloat(e.target.value) || 0) })}
+                      className="block w-full rounded-lg border border-slate-900 bg-slate-950/45 px-3 py-1.5 text-white placeholder-slate-500 focus:border-violet-500 focus:outline-none text-xs"
+                    />
+                  </div>
+                  <div className="grid gap-3 grid-cols-2">
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Account Size ($)</label>
-                      <input 
-                        type="number"
-                        value={calc.balance}
-                        onChange={(e) => setCalc({ ...calc, balance: Math.max(0, parseFloat(e.target.value) || 0) })}
-                        className="block w-full rounded-xl border border-slate-900 bg-slate-950/45 px-3 py-2.5 text-white placeholder-slate-500 shadow-sm focus:border-violet-500 focus:outline-none text-xs"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Risk Limit (%)</label>
+                      <label className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Risk %</label>
                       <input 
                         type="number"
                         step="0.1"
                         value={calc.riskPercent}
                         onChange={(e) => setCalc({ ...calc, riskPercent: Math.max(0, parseFloat(e.target.value) || 0) })}
-                        className="block w-full rounded-xl border border-slate-900 bg-slate-950/45 px-3 py-2.5 text-white placeholder-slate-500 shadow-sm focus:border-violet-500 focus:outline-none text-xs"
+                        className="block w-full rounded-lg border border-slate-900 bg-slate-950/45 px-3 py-1.5 text-white focus:border-violet-500 focus:outline-none text-xs"
                       />
                     </div>
-                  </div>
-
-                  {/* Row 2 */}
-                  <div className="grid gap-4 grid-cols-2">
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Stop Loss (Pips/Points)</label>
+                      <label className="text-[9px] font-bold uppercase tracking-wider text-slate-500">SL (Pips)</label>
                       <input 
                         type="number"
                         value={calc.stopLossPips}
                         onChange={(e) => setCalc({ ...calc, stopLossPips: Math.max(1, parseFloat(e.target.value) || 0) })}
-                        className="block w-full rounded-xl border border-slate-900 bg-slate-950/45 px-3 py-2.5 text-white placeholder-slate-500 shadow-sm focus:border-violet-500 focus:outline-none text-xs"
+                        className="block w-full rounded-lg border border-slate-900 bg-slate-950/45 px-3 py-1.5 text-white focus:border-violet-500 focus:outline-none text-xs"
                       />
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Asset Type</label>
-                      <select 
-                        value={calc.assetType}
-                        onChange={(e) => setCalc({ ...calc, assetType: e.target.value })}
-                        className="block w-full rounded-xl border border-slate-900 bg-slate-950/45 px-3 py-2.5 text-white shadow-sm focus:border-violet-500 focus:outline-none text-xs"
-                      >
-                        <option value="Forex">Forex (EUR/GBP/JPY)</option>
-                        <option value="Gold">Gold (XAUUSD)</option>
-                        <option value="Crypto">Crypto (BTC/ETH)</option>
-                      </select>
-                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Asset Type</label>
+                    <select 
+                      value={calc.assetType}
+                      onChange={(e) => setCalc({ ...calc, assetType: e.target.value })}
+                      className="block w-full rounded-lg border border-slate-900 bg-slate-950/45 px-3 py-1.5 text-white focus:border-violet-500 focus:outline-none text-xs"
+                    >
+                      <option value="Forex">Forex (EUR/GBP/JPY)</option>
+                      <option value="Gold">Gold (XAUUSD)</option>
+                      <option value="Crypto">Crypto (BTC/ETH)</option>
+                    </select>
                   </div>
                 </div>
               </div>
 
-              {/* Calculator Output Grid */}
-              <div className="mt-6 grid grid-cols-2 gap-4 border-t border-slate-900 pt-5">
-                <div className="bg-slate-950/60 border border-slate-900 rounded-2xl p-4 text-center">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Total Cash At Risk</span>
-                  <p className="text-xl font-black text-rose-450 mt-1">${dollarRisk.toLocaleString()}</p>
-                  <span className="text-[8px] text-slate-500 block mt-0.5">({calc.riskPercent}% size)</span>
+              <div className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-900 pt-3.5">
+                <div className="bg-slate-950/60 border border-slate-900 rounded-xl p-2.5 text-center">
+                  <span className="text-[8px] font-bold text-slate-550 uppercase tracking-wide">Risk Cash</span>
+                  <p className="text-sm font-black text-rose-400 mt-0.5">${dollarRisk}</p>
+                </div>
+                <div className="bg-slate-950/60 border border-violet-500/10 rounded-xl p-2.5 text-center">
+                  <span className="text-[8px] font-bold text-slate-555 uppercase tracking-wide">Size Output</span>
+                  <p className="text-sm font-black text-violet-400 mt-0.5">{lotSizeOutput} Lots</p>
+                </div>
+              </div>
+            </div>
+
+            {/* ⚡ Currency Strength Heatmap */}
+            <div className="glass-panel rounded-3xl p-6 shadow-xl flex flex-col justify-between border border-violet-500/10 md:col-span-1">
+              <div>
+                <div className="flex items-center justify-between mb-4 border-b border-slate-900/60 pb-3">
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Zap className="h-4.5 w-4.5 text-yellow-455 animate-pulse" />
+                    Currency Strength Meter
+                  </h3>
+                  <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                 </div>
 
-                <div className="bg-slate-950/60 border border-violet-500/10 rounded-2xl p-4 text-center">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Recommended Position</span>
-                  <p className="text-xl font-black text-violet-400 mt-1">{lotSizeOutput} Lots</p>
-                  <span className="text-[8px] text-slate-500 block mt-0.5">
-                    {calc.assetType === "Crypto" ? "Units" : "Standard Lots"}
-                  </span>
+                <div className="space-y-3.5">
+                  {Object.entries(strengths).map(([curr, val]) => {
+                    let color = "bg-violet-600";
+                    if (val > 75) color = "bg-emerald-500";
+                    else if (val < 30) color = "bg-rose-500";
+
+                    return (
+                      <div key={curr} className="space-y-1">
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="font-bold text-slate-200">{curr}</span>
+                          <span className="font-mono text-slate-400">{val}%</span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-900">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-1000 ${color}`}
+                            style={{ width: `${val}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
+              </div>
+
+              <div className="mt-4 p-2.5 rounded-xl bg-slate-950/40 border border-slate-900 text-[8px] text-slate-500 text-center uppercase tracking-wider">
+                ⚡ Feed active: Strong buying zones in **USD/JPY** due to high currency divergence.
+              </div>
+            </div>
+
+          </div>
+
+          {/* 🔥 BINANCE-STYLE CRYPTO MARKET HUB (Ticking coin feed + rolling order book) */}
+          <div className="grid gap-6 md:grid-cols-3">
+            
+            {/* Live Prices Ticker (2 columns) */}
+            <div className="glass-panel rounded-3xl p-6 shadow-xl border border-violet-500/10 md:col-span-2 flex flex-col justify-between">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2 mb-4.5 border-b border-slate-900/60 pb-3">
+                  <Coins className="h-5 w-5 text-violet-400" />
+                  Binance Live Crypto Ticker
+                </h3>
+                
+                <div className="space-y-3">
+                  {tickers.map((t) => {
+                    const priceFormatted = t.price.toLocaleString(undefined, {
+                      minimumFractionDigits: t.symbol.includes("XRP") ? 3 : 2,
+                      maximumFractionDigits: t.symbol.includes("XRP") ? 3 : 2
+                    });
+                    const isPositive = t.change >= 0;
+
+                    let tickClass = "border-slate-900 bg-slate-950/45";
+                    if (t.status === "up") tickClass = "border-emerald-500/40 bg-emerald-500/5 shadow shadow-emerald-500/5 scale-[1.005]";
+                    if (t.status === "down") tickClass = "border-rose-500/40 bg-rose-500/5 shadow shadow-rose-500/5 scale-[1.005]";
+
+                    return (
+                      <div 
+                        key={t.symbol} 
+                        className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all duration-300 ${tickClass}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl shrink-0">{t.logo}</span>
+                          <div>
+                            <span className="text-xs font-bold text-white uppercase">{t.symbol}</span>
+                            <p className="text-[9px] text-slate-500 mt-0.5">{t.name} Network</p>
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <span className={`text-xs font-mono font-black transition-all ${
+                            t.status === "up" ? "text-emerald-400" : t.status === "down" ? "text-rose-450" : "text-slate-200"
+                          }`}>
+                            ${priceFormatted}
+                          </span>
+                          
+                          <span className={`text-[9px] font-bold rounded-md px-2 py-0.5 ml-3 inline-block shrink-0 ${
+                            isPositive 
+                              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
+                              : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                          }`}>
+                            {isPositive ? "+" : ""}{t.change.toFixed(2)}%
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* simulated websocket tip */}
+              <div className="mt-4 p-3 rounded-2xl bg-slate-950/60 border border-slate-900 text-[10px] text-slate-400 flex items-center justify-between">
+                <span className="font-semibold text-slate-550">Websocket Ticker State:</span>
+                <span className="font-bold text-emerald-400 flex items-center gap-1.5 uppercase tracking-wider text-[8px]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Streaming Live
+                </span>
+              </div>
+            </div>
+
+            {/* Rolling High-Frequency Order executions (Order Book) */}
+            <div className="glass-panel rounded-3xl p-6 shadow-xl border border-violet-500/10 md:col-span-1 flex flex-col justify-between">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2 mb-4.5 border-b border-slate-900/60 pb-3">
+                  <Zap className="h-4.5 w-4.5 text-yellow-450 animate-pulse" />
+                  Market Executions Feed
+                </h3>
+
+                {/* rolling logs list */}
+                <div className="space-y-3 max-h-[260px] overflow-hidden">
+                  {liveOrders.map((ord) => (
+                    <div 
+                      key={ord.id} 
+                      className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950/45 border border-slate-900/50 text-[10px] hover:border-slate-800 transition"
+                    >
+                      <div>
+                        <span className="font-bold text-white uppercase">{ord.pair}</span>
+                        <span className={`ml-2 px-1 rounded text-[8px] font-black ${
+                          ord.type === "BUY" ? "bg-emerald-500/10 text-emerald-400" : "bg-rose-500/10 text-rose-400"
+                        }`}>
+                          {ord.type}
+                        </span>
+                        <p className="text-slate-500 text-[8px] mt-0.5">Vol: {ord.amount}</p>
+                      </div>
+
+                      <div className="text-right">
+                        <span className={`font-mono font-bold ${ord.type === "BUY" ? "text-emerald-400" : "text-rose-450"}`}>
+                          ${ord.price}
+                        </span>
+                        <p className="text-slate-500 text-[8px] mt-0.5">{ord.time}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* quick total warning badge */}
+              <div className="mt-4 p-2.5 rounded-xl bg-slate-950/30 border border-slate-900 text-[8px] text-slate-500 text-center uppercase tracking-wider">
+                ⚡ Global crypto volumes are 14.5% above standard averages.
               </div>
             </div>
 
