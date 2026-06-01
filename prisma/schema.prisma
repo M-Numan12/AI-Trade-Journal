@@ -1,0 +1,68 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id             String          @id @default(uuid())
+  name           String
+  email          String          @unique
+  password       String
+  subscription   String          @default("FREE") // "FREE", "PRO", "PREMIUM"
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  trades         Trade[]
+  psychologyLogs PsychologyLog[]
+}
+
+model Trade {
+  id            String         @id @default(uuid())
+  userId        String
+  pair          String         // e.g. "EURUSD", "BTCUSDT"
+  type          String         // "BUY" or "SELL"
+  entryPrice    Float
+  sl            Float          // Stop Loss
+  tp            Float          // Take Profit
+  lotSize       Float
+  pips          Float?
+  pnl           Float          // Profit/Loss amount
+  result        String         // "WIN", "LOSS", "BREAKEVEN"
+  screenshotUrl String?
+  notes         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  analysis      AiAnalysis?
+  psychologyLogs PsychologyLog[]
+}
+
+model PsychologyLog {
+  id              String   @id @default(uuid())
+  userId          String
+  tradeId         String?
+  moodBefore      String   // "Confident", "Fear", "FOMO", "Angry", "Excited"
+  emotionAfter    String?  // "Satisfied", "Regret", "Frustrated", "Greedy"
+  disciplineScore Int      // 1-10 scale
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trade           Trade?   @relation(fields: [tradeId], references: [id], onDelete: SetNull)
+}
+
+model AiAnalysis {
+  id                   String   @id @default(uuid())
+  tradeId              String   @unique
+  mistakes             String   // Stored as JSON string or comma-separated: e.g. "Overtrading,Chasing Market"
+  riskRewardAssessment String
+  generalFeedback      String
+  suggestions          String   // Stored as JSON string or semi-colon separated
+  createdAt            DateTime @default(now())
+
+  trade                Trade    @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+}
